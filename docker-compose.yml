@@ -1,0 +1,52 @@
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: subscriptions
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+#Docker_container_one_time_use_for_migrations
+  migrator:
+    image: migrate/migrate:v4.18.3 #fixed_version
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/migrations:ro
+    #Сommand - active by terminal
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://postgres:postgres@db:5432/subscriptions?sslmode=disable"
+      - up
+
+  app:
+    build: .
+    environment:
+      APP_ENV: dev
+      APP_PORT: 8080
+      APP_DB_HOST: db
+      APP_DB_PORT: 5432
+      APP_DB_USER: postgres
+      APP_DB_PASSWORD: postgres
+      APP_DB_NAME: subscriptions
+      APP_DB_SSLMODE: disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
