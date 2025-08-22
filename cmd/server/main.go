@@ -16,14 +16,14 @@ import (
 	"syscall"
 	"time"
 
-	"subscriptions-api/internal/config"
-	"subscriptions-api/internal/handler"
-	"subscriptions-api/internal/storage"
+	"github.com/AlexeiDevelop/subscriptions-api/internal/config"
+	"github.com/AlexeiDevelop/subscriptions-api/internal/handler"
+	"github.com/AlexeiDevelop/subscriptions-api/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	_ "subscriptions-api/docs"
+	_ "github.com/AlexeiDevelop/subscriptions-api/docs"
 
 	httpSwagger "github.com/swaggo/http-swagger"
 )

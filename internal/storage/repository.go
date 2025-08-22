@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"subscriptions-api/internal/model"
+	"github.com/AlexeiDevelop/subscriptions-api/internal/model"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"

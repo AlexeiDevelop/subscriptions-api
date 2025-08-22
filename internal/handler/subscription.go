@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"subscriptions-api/internal/model"
-	"subscriptions-api/internal/storage"
+	"github.com/AlexeiDevelop/subscriptions-api/internal/model"
+	"github.com/AlexeiDevelop/subscriptions-api/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
