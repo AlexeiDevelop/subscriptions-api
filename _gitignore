@@ -1,0 +1,21 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Go
+bin/
+vendor/
+coverage.out
+
+# Local artifacts
+backup.sql
+logs/
+*.log
+
+# Swagger cache
+.swag/
+
+# Docker
+*.env
+docker-data/
