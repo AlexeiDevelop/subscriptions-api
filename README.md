@@ -1,73 +1,161 @@
-# Subscriptions API (Go + PostgreSQL)
+# Subscriptions API
 
-Учебный, но максимально приближенный к продакшену REST‑сервис учёта онлайн‑подписок.
+REST‑сервис для агрегации данных об онлайн‑подписках пользователей.
 
-## Быстрый старт (локально)
+**Сделано по ТЗ:** CRUDL, суммирование за период с фильтрами, PostgreSQL + миграции, конфиг через YAML/ENV, логирование, Swagger UI, запуск через Docker Compose.
 
-1) Установи Go 1.22+.
-2) Создай `.env` по образцу из `.env.example` **или** поправь `configs/config.yaml`.
-3) Создай БД `subscriptions` в PostgreSQL (или используй docker-compose позже).
-4) Примени миграции (через golang-migrate CLI) или создай таблицу руками из `migrations/001_create_subscriptions.up.sql`.
-5) Запусти сервер:
+> Требования: Docker Desktop (Compose V2). Для локального запуска — Go 1.23. Swagger-спека уже сгенерирована и лежит в `docs/`.
+
+---
+
+## 🚀 Быстрый старт (Docker)
+
 ```bash
-go run ./cmd/server
+# 1) Поднять БД
+docker compose up -d db
+
+# 2) Применить миграции
+docker compose run --rm migrator
+
+# 3) Собрать и запустить приложение
+docker compose up --build -d app
+
+# 4) Проверить
+curl -s http://localhost:8080/subscriptions || true
+```
+### Swagger UI
+Открыть: <http://localhost:8080/swagger/index.html>
+
+Проверка JSON-спеки:
+```bash
+curl -s http://localhost:8080/swagger/doc.json | head
 ```
 
-Сервер поднимется на `http://localhost:8080`.
+---
 
-## Эндпоинты
+## 🧰 Makefile (удобные цели)
 
-- `POST /subscriptions` — создать подписку
-- `GET  /subscriptions/{id}` — получить по ID
-- `PUT  /subscriptions/{id}` — обновить
+```bash
+# docker
+make dc-up-db             # поднять БД
+make dc-migrate           # применить миграции
+make dc-up-app            # собрать и поднять приложение
+make dc-logs              # логи приложения (Ctrl+C для выхода)
+make dc-ps                # статус контейнеров
+make dc-down              # остановить всё (данные сохранятся)
+make dc-down-v            # остановить всё и удалить тома (данные БД будут удалены!)
+
+# локально
+make tidy fmt vet build   # go инструменты
+make run                  # локальный запуск (порт 8080)
+make test                 # тесты (плейсхолдер)
+make swagger              # пересобрать swagger (если менялись аннотации)
+```
+
+---
+
+## ⚙️ Конфигурация
+
+Конфиг читается из `configs/config.yaml` + ENV (Viper). В Compose переменные заданы в `docker-compose.yml`:
+
+```yaml
+APP_ENV: dev
+APP_PORT: 8080
+APP_DB_HOST: db
+APP_DB_PORT: 5432
+APP_DB_USER: postgres
+APP_DB_PASSWORD: postgres
+APP_DB_NAME: subscriptions
+APP_DB_SSLMODE: disable
+```
+
+DSN:
+```
+postgres://postgres:postgres@db:5432/subscriptions?sslmode=disable
+```
+
+---
+
+## 🗃️ Миграции
+
+Файлы в `migrations/`. Применение:
+
+```bash
+docker compose run --rm migrator   # up
+docker compose run --rm --entrypoint "" migrator   migrate -path=/migrations -database=postgres://postgres:postgres@db:5432/subscriptions?sslmode=disable version
+docker compose run --rm --entrypoint "" migrator   migrate -path=/migrations -database=postgres://postgres:postgres@db:5432/subscriptions?sslmode=disable down 1
+```
+
+Проверка состояния:
+```bash
+docker compose exec db psql -U postgres -d subscriptions -c "SELECT version, dirty FROM schema_migrations;"
+```
+
+---
+
+## 🔌 API кратко
+
+База пути: `/`
+
+- `POST /subscriptions` — создать
+- `GET /subscriptions/{id}` — получить по ID
+- `PUT /subscriptions/{id}` — обновить
 - `DELETE /subscriptions/{id}` — удалить
-- `GET  /subscriptions` — список (фильтры: user_id, service_name; пагинация: limit, offset)
-- `GET  /subscriptions/summary` — сумма за период по месяцам (`from=MM-YYYY&to=MM-YYYY`, фильтры: user_id, service_name)
+- `GET /subscriptions` — список (фильтры: `user_id`, `service_name`, пагинация: `limit`, `offset`)
+- `GET /subscriptions/summary?from=MM-YYYY&to=MM-YYYY&user_id=&service_name=` — суммирование стоимости за период
 
-## Конфигурация
-
-- По умолчанию читается `configs/config.yaml`.
-- Переменные окружения перекрывают YAML (pref: `APP_`), см. `.env.example`.
-
-## Миграции
-
-CLI: https://github.com/golang-migrate/migrate
-
+Примеры:
 ```bash
-migrate -database "postgres://user:password@localhost:5432/subscriptions?sslmode=disable" -path ./migrations up
+# Создать
+curl -X POST http://localhost:8080/subscriptions   -H "Content-Type: application/json"   -d '{"service_name":"Netflix","price":999,"user_id":"60601fee-2bf1-4721-ae6f-7636e79a0cba","start_date":"07-2025"}'
+
+# Сумма за период
+curl "http://localhost:8080/subscriptions/summary?from=07-2025&to=10-2025&user_id=60601fee-2bf1-4721-ae6f-7636e79a0cba&service_name=Netflix"
 ```
 
-## Swagger (опционально, позже)
+---
 
-Добавлены комментарии‑заготовки. Сгенерировать доки можно через `swaggo/swag`:
+## 🗂️ Структура проекта
 
-```bash
-go install github.com/swaggo/swag/cmd/swag@latest
-swag init -g cmd/server/main.go
 ```
-
-## Docker (позже)
-
-В проекте есть `Dockerfile` и `docker-compose.yml`, можно запустить всё одной командой:
-
-```bash
-docker compose up --build
-```
-
-## Структура
-```
-cmd/server/main.go
+cmd/server/             # main.go — точка входа
 internal/
-  config/config.go
-  handler/subscription.go
-  model/subscription.go
-  storage/postgres.go
-  storage/repository.go
-configs/config.yaml
-migrations/001_create_subscriptions.up.sql
-migrations/001_create_subscriptions.down.sql
-.env.example
-Dockerfile
+  config/               # Viper + конфиг YAML/ENV
+  handler/              # HTTP-ручки (chi)
+  model/                # доменные модели и payload
+  storage/              # Postgres (pgxpool), репозиторий
+migrations/             # SQL миграции
+docs/                   # Swagger (сгенерированные файлы)
+configs/                # config.yaml
 docker-compose.yml
+Dockerfile
 Makefile
 ```
+
+---
+
+## 🔧 Технологии
+
+- Go 1.23, `net/http` + `chi`
+- PostgreSQL 15 (Docker), `pgx/v5`
+- Миграции: `migrate/migrate`
+- Конфиг: YAML + ENV (Viper)
+- Логи: `log/slog`
+- Swagger: `swaggo/swag` + `http-swagger`
+
+---
+
+## ✅ Траблшутинг
+
+- **`connection refused localhost:5432`** — БД не запущена → `make dc-up-db` и дождитесь `healthy`.
+- **`relation "subscriptions" does not exist`** — не применены миграции → `make dc-migrate`.
+- **Swagger 404** — перегенерируйте `docs/` (`make swagger`) и проверьте маршрут `/swagger/*` в `main.go`.
+
+---
+
+## 🗺️ Roadmap (v1.1)
+
+- Оборачиваемые ошибки по всему проекту (`fmt.Errorf("%s: %w", ...)`) + единый маппинг в хендлерах.
+- Больше структурных логов (детали запроса и поле‑по‑полю ошибки валидации).
+- Интеграционные тесты и GitHub Actions.
+- Улучшённая пагинация/сортировка.
